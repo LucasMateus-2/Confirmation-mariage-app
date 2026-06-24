@@ -1,61 +1,56 @@
 package main
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
+	"os"
 
-	"github.com/LucasMateus-2/Confirmation-mariage-app/internal/handler"
-	"github.com/LucasMateus-2/Confirmation-mariage-app/internal/middleware"
-	"github.com/LucasMateus-2/Confirmation-mariage-app/internal/repository"
-	"github.com/LucasMateus-2/Confirmation-mariage-app/internal/service"
-
-	_ "github.com/jackc/pgx/v5/stdlib" // Driver do Postgres
+	"github.com/joho/godotenv"
+	"github.com/lucas/confirmation-mariage-app/internal/handler"
+	"github.com/lucas/confirmation-mariage-app/internal/infra"
+	"github.com/lucas/confirmation-mariage-app/internal/repository"
+	"github.com/lucas/confirmation-mariage-app/internal/router"
+	"github.com/lucas/confirmation-mariage-app/internal/service"
+	"github.com/lucas/confirmation-mariage-app/pkg/logger"
 )
 
 func main() {
-	jwtSecret := "sua_chave_secreta_super_segura"
-	port := ":8080"
+	if err := godotenv.Load(); err != nil {
+		logger.Info("aviso: .env não encontrado, usando variáveis de ambiente do sistema")
+	}
 
-	// String de conexão (em produção, use os.Getenv)
-	dsn := "postgres://postgres:secret@localhost:5432/login_db?sslmode=disable"
+	logger.Init()
+	logger.Info("iniciando servidor...")
 
-	// 1. Conecta ao Banco de Dados
-	db, err := sql.Open("pgx", dsn)
+	db, err := infra.NewDB()
 	if err != nil {
-		log.Fatalf("Erro ao abrir banco de dados: %v", err)
+		logger.Fatal(err, "erro ao conectar no banco")
 	}
 	defer db.Close()
 
-	// Verifica se a conexão está ativa
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Não foi possível conectar ao banco: %v", err)
+	logger.Info("banco de dados conectado")
+
+	// Repositories
+	userRepo := repository.NewUserRepository(db)
+	guestRepo := repository.NewGuestRepository(db)
+
+	// Services
+	authService := service.NewAuthService(userRepo)
+	guestService := service.NewGuestService(guestRepo)
+
+	// Handlers
+	authHandler := handler.NewAuthHandler(authService)
+	guestHandler := handler.NewGuestHandler(guestService)
+
+	// Router
+	r := router.Setup(authHandler, guestHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	// 2. Injeta o DB no novo repositório Postgres
-	userRepo := repository.NewPostgresUserRepository(db)
-	authService := service.NewAuthService(userRepo, jwtSecret)
-	authHandler := handler.NewAuthHandler(authService)
+	logger.With().Str("port", port).Msg("servidor pronto")
 
-	// Rotas
-	http.HandleFunc("/register", authHandler.Register)
-	http.HandleFunc("/login", authHandler.Login)
-
-	protectedMux := http.NewServeMux()
-	protectedMux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(middleware.UserIDKey)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "Bem-vindo à área protegida!",
-			"user_id": userID,
-		})
-	})
-	http.Handle("/dashboard", middleware.JWTMiddleware(jwtSecret)(protectedMux))
-
-	fmt.Printf("Servidor rodando na porta %s...\n", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
-		log.Fatalf("Erro ao iniciar o servidor: %v", err)
+	if err := r.Run(":" + port); err != nil {
+		logger.Fatal(err, "erro ao iniciar servidor")
 	}
 }

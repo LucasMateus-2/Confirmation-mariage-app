@@ -1,58 +1,61 @@
 package service
 
 import (
-	"context"
 	"errors"
+	"os"
 	"time"
 
-	"github.com/LucasMateus-2/Confirmation-mariage-app/internal/domain"
-
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/lucas/confirmation-mariage-app/internal/model"
+	"github.com/lucas/confirmation-mariage-app/internal/repository"
+
+	"github.com/lucas/confirmation-mariage-app/pkg/hash"
 )
 
-type authService struct {
-	repo      domain.UserRepository
-	jwtSecret []byte
+type AuthService struct {
+	userRepo *repository.UserRepository
 }
 
-func NewAuthService(repo domain.UserRepository, jwtSecret string) domain.AuthService {
-	return &authService{
-		repo:      repo,
-		jwtSecret: []byte(jwtSecret),
-	}
+func NewAuthService(userRepo *repository.UserRepository) *AuthService {
+	return &AuthService{userRepo: userRepo}
 }
 
-func (s *authService) Register(ctx context.Context, email, password string) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	user := &domain.User{
-		Email:    email,
-		Password: string(hashedPassword),
-	}
-
-	return s.repo.Create(ctx, user)
+type LoginInput struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
-func (s *authService) Login(ctx context.Context, email, password string) (string, error) {
-	user, err := s.repo.GetByEmail(ctx, email)
+type TokenResponse struct {
+	Token string     `json:"token"`
+	User  model.User `json:"user"`
+}
+
+func (s *AuthService) Login(input LoginInput) (*TokenResponse, error) {
+	user, err := s.userRepo.FindByEmail(input.Email)
 	if err != nil {
-		return "", errors.New("credenciais inválidas")
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("credenciais inválidas")
+	}
+	if !hash.Check(input.Password, user.Password) {
+		return nil, errors.New("credenciais inválidas")
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	token, err := generateToken(user.ID)
 	if err != nil {
-		return "", errors.New("credenciais inválidas")
+		return nil, err
 	}
 
-	// Gerando Token JWT
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.ID,
-		"exp": time.Now().Add(time.Hour * 24).Unix(),
-	})
+	return &TokenResponse{Token: token, User: *user}, nil
+}
 
-	return token.SignedString(s.jwtSecret)
+func generateToken(userID int64) (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
 }

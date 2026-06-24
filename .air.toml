@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #:schema https://json.schemastore.org/any.json
 
 env_files = []
@@ -57,3 +58,19 @@ tmp_dir = "tmp"
 [screen]
   clear_on_rebuild = false
   keep_scroll = true
+=======
+[build]
+  cmd = "go build -o ./tmp/main ./cmd/api"
+  bin = "./tmp/main"
+  include_ext = ["go", "env"]
+  exclude_dir = ["tmp", "vendor"]
+
+[log]
+  time = true
+
+[color]
+  main = "yellow"
+  watcher = "cyan"
+  build = "green"
+  runner = "magenta"
+>>>>>>> origin/feat/refact-gin-gonic
