@@ -63,29 +63,27 @@ func (h *GuestHandler) GetForConfirmation(c *gin.Context) {
 }
 
 // PATCH /guests/:id/confirm — confirma presença do convidado e agregados (público)
-func (s *GuestService) Confirm(guestID int, input model.ConfirmInput) error {
-	// 1. Buscar convidado
-	guest, err := s.repo.GetByID(guestID)
+// PATCH /guests/:id/confirm — confirma presença do convidado e agregados (público)
+func (h *GuestHandler) Confirm(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return err
+		response.BadRequest(c, "id inválido")
+		return
 	}
 
-	// 2. Atualizar presença do convidado
-	guest.Attending = input.Attending
-	guest.Responded = true
-
-	if err := s.repo.UpdateGuest(guest); err != nil {
-		return err
+	var input model.ConfirmInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "payload inválido")
+		return
 	}
 
-	// 3. Atualizar acompanhantes (se houver)
-	for _, p := range input.PlusOnes {
-		if err := s.repo.UpdatePlusOneAttendance(p.ID, p.Attending); err != nil {
-			return err
-		}
+	if err := h.guestService.Confirm(id, input); err != nil {
+		log.Println("erro ao confirmar presença:", err)
+		response.InternalError(c)
+		return
 	}
 
-	return nil
+	response.OK(c, gin.H{"message": "presença confirmada"})
 }
 
 // GET /dashboard — resumo geral (protegido)

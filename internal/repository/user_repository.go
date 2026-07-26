@@ -1,42 +1,47 @@
 package repository
 
 import (
-	"database/sql"
 	"errors"
 
 	"github.com/lucas/confirmation-mariage-app/internal/model"
+	"gorm.io/gorm"
 )
 
 type UserRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewUserRepository(db *sql.DB) *UserRepository {
+func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
-
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
-	user := &model.User{}
-	row := r.db.QueryRow(`SELECT id, email, password FROM users WHERE email = $1`, email)
-	err := row.Scan(&user.ID, &user.Email, &user.Password)
-	if errors.Is(err, sql.ErrNoRows) {
+	var user model.User
+
+	// Usa LOWER para ignorar case-sensitivity (PostgreSQL é case-sensitive)
+	result := r.db.Where("LOWER(email) = LOWER(?)", email).First(&user)
+
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		// Não encontrou – retorna nil sem erro
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		// Outro erro (conexão, etc.)
+		return nil, result.Error
 	}
-	return user, nil
+
+	return &user, nil
 }
 
 func (r *UserRepository) FindByID(id int) (*model.User, error) {
-	user := &model.User{}
-	row := r.db.QueryRow(`SELECT id, email FROM users WHERE id = $1`, id)
-	err := row.Scan(&user.ID, &user.Email)
-	if errors.Is(err, sql.ErrNoRows) {
+	var user model.User
+
+	result := r.db.First(&user, id) // ou r.db.Where("id = ?", id).First(&user)
+
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
+	if result.Error != nil {
+		return nil, result.Error
 	}
-	return user, nil
+	return &user, nil
 }
