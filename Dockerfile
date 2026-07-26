@@ -10,7 +10,7 @@ RUN go build -o server ./cmd/api
 FROM alpine:3.19
 WORKDIR /app
 COPY --from=builder /app/server .
-COPY .env.example .env
 
 EXPOSE 8080
 CMD ["./server"]
+
