@@ -1,14 +1,15 @@
 package infra
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func NewDB() (*sql.DB, error) {
+func NewDB() (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		os.Getenv("DB_HOST"),
@@ -18,12 +19,18 @@ func NewDB() (*sql.DB, error) {
 		os.Getenv("DB_NAME"),
 	)
 
-	db, err := sql.Open("postgres", dsn)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info), // loga as queries, ótimo pra debug
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.Ping(); err != nil {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if err := sqlDB.Ping(); err != nil {
 		return nil, err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/lucas/confirmation-mariage-app/internal/handler"
 	"github.com/lucas/confirmation-mariage-app/internal/infra"
+	"github.com/lucas/confirmation-mariage-app/internal/model"
 	"github.com/lucas/confirmation-mariage-app/internal/repository"
 	"github.com/lucas/confirmation-mariage-app/internal/router"
 	"github.com/lucas/confirmation-mariage-app/internal/service"
@@ -16,7 +17,6 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		logger.Info("aviso: .env não encontrado, usando variáveis de ambiente do sistema")
 	}
-
 	logger.Init()
 	logger.Info("iniciando servidor...")
 
@@ -24,10 +24,17 @@ func main() {
 	if err != nil {
 		logger.Fatal(err, "erro ao conectar no banco")
 	}
-	defer db.Close()
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Fatal(err, "erro ao obter conexão sql subjacente")
+	}
+	defer sqlDB.Close()
 
 	logger.Info("banco de dados conectado")
-
+	if err := db.AutoMigrate(&model.User{}, &model.Guest{}, &model.PlusOne{}); err != nil {
+		logger.Fatal(err, "erro ao migrar schema")
+	}
 	// Repositories
 	userRepo := repository.NewUserRepository(db)
 	guestRepo := repository.NewGuestRepository(db)
@@ -49,7 +56,6 @@ func main() {
 	}
 
 	logger.With().Str("port", port).Msg("servidor pronto")
-
 	if err := r.Run(":" + port); err != nil {
 		logger.Fatal(err, "erro ao iniciar servidor")
 	}

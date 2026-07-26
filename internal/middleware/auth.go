@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 )
 
 func Auth() gin.HandlerFunc {
+	fmt.Println("Debug: chegou no authHander")
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {

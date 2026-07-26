@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -21,7 +22,7 @@ func NewAuthService(userRepo *repository.UserRepository) *AuthService {
 }
 
 type LoginInput struct {
-	Email    string `json:"email" binding:"required,email"`
+	Email    string `json:"email"    binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -33,12 +34,15 @@ type TokenResponse struct {
 func (s *AuthService) Login(input LoginInput) (*TokenResponse, error) {
 	user, err := s.userRepo.FindByEmail(input.Email)
 	if err != nil {
+		fmt.Printf("DEBUG: erro ao buscar usuário: %v\n", err)
 		return nil, err
 	}
 	if user == nil {
+		fmt.Println("DEBUG: usuário não encontrado (user == nil)")
 		return nil, errors.New("credenciais inválidas")
 	}
 	if !hash.Check(input.Password, user.Password) {
+		fmt.Printf("DEBUG:Credenciais Inváidas")
 		return nil, errors.New("credenciais inválidas")
 	}
 
