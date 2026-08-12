@@ -1,45 +1,47 @@
 package repository
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 
-	"github.com/LucasMateus-2/Confirmation-mariage-app/internal/domain"
+	"github.com/lucas/confirmation-mariage-app/internal/model"
+	"gorm.io/gorm"
 )
 
-type PostgresUserRepository struct {
-	db *sql.DB
+type UserRepository struct {
+	db *gorm.DB
 }
 
-// NewPostgresUserRepository cria uma nova instância conectada ao banco
-func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
-	return &PostgresUserRepository{db: db}
+func NewUserRepository(db *gorm.DB) *UserRepository {
+	return &UserRepository{db: db}
 }
+func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
+	var user model.User
 
-func (r *PostgresUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	query := `SELECT id, email, password FROM users WHERE email = $1`
+	// Usa LOWER para ignorar case-sensitivity (PostgreSQL é case-sensitive)
+	result := r.db.Where("LOWER(email) = LOWER(?)", email).First(&user)
 
-	var user domain.User
-	err := r.db.QueryRowContext(ctx, query, email).Scan(&user.ID, &user.Email, &user.Password)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("usuário não encontrado")
-		}
-		return nil, err
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		// Não encontrou – retorna nil sem erro
+		return nil, nil
+	}
+	if result.Error != nil {
+		// Outro erro (conexão, etc.)
+		return nil, result.Error
 	}
 
 	return &user, nil
 }
 
-func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) error {
-	query := `INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id`
+func (r *UserRepository) FindByID(id int) (*model.User, error) {
+	var user model.User
 
-	// Executa o insert e já joga o ID gerado pelo banco de volta na struct
-	err := r.db.QueryRowContext(ctx, query, user.Email, user.Password).Scan(&user.ID)
-	if err != nil {
-		return err
+	result := r.db.First(&user, id) // ou r.db.Where("id = ?", id).First(&user)
+
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-
-	return nil
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
 }
